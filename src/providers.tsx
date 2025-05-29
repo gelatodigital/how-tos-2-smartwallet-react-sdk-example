@@ -14,7 +14,7 @@ import {
 import { useEffect, useState } from "react";
 import { http, useAccount } from "wagmi";
 
-import { baseSepolia, sepolia } from "viem/chains";
+import { baseSepolia, inkSepolia, sepolia } from "viem/chains";
 
 // Chain configuration interface
 interface ChainConfig {
@@ -42,6 +42,15 @@ const CHAIN_CONFIGS: Record<number, ChainConfig> = {
     id: baseSepolia.id,
     name: "Base Sepolia",
     explorer: "https://sepolia.basescan.org",
+    tokens: {
+      WETH: "0x4200000000000000000000000000000000000006",
+      USDC: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    },
+  },
+  [inkSepolia.id]: {
+    id: inkSepolia.id,
+    name: "Ink Sepolia",
+    explorer: "https://explorer-sepolia.inkonchain.com/",
     tokens: {
       WETH: "0x4200000000000000000000000000000000000006",
       USDC: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
@@ -276,9 +285,9 @@ export default function Providers() {
         // wallet: "kernel"
         waas: dynamic(waasAppId),
         wagmi: wagmi({
-          chains: [baseSepolia],
+          chains: [inkSepolia],
           transports: {
-            [baseSepolia.id]: http(),
+            [inkSepolia.id]: http(),
           },
         }),
       }}
