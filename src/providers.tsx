@@ -13,8 +13,8 @@ import {
 } from "@gelatonetwork/smartwallet-react-sdk";
 import { useEffect, useState } from "react";
 import { http, useAccount } from "wagmi";
-
-import { baseSepolia, inkSepolia, sepolia } from "viem/chains";
+import { arbitrumSepolia, baseSepolia, flowTestnet, inkSepolia, sepolia, storyAeneid } from "viem/chains";
+import { encodeFunctionData } from "viem";
 
 // Chain configuration interface
 interface ChainConfig {
@@ -22,9 +22,11 @@ interface ChainConfig {
   name: string;
   explorer: string;
   tokens: {
-    WETH: `0x${string}`;
-    USDC: `0x${string}`;
+    WETH?: `0x${string}`;
+    USDC?: `0x${string}`;
+    WIP?: `0x${string}`;
   };
+  counterAddress: `0x${string}`;
 }
 
 // Chain configurations
@@ -37,6 +39,7 @@ const CHAIN_CONFIGS: Record<number, ChainConfig> = {
       WETH: "0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9",
       USDC: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
     },
+    counterAddress: "0xEEeBe2F778AA186e88dCf2FEb8f8231565769C27",
   },
   [baseSepolia.id]: {
     id: baseSepolia.id,
@@ -46,15 +49,41 @@ const CHAIN_CONFIGS: Record<number, ChainConfig> = {
       WETH: "0x4200000000000000000000000000000000000006",
       USDC: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
     },
+    counterAddress: "0xEEeBe2F778AA186e88dCf2FEb8f8231565769C27",
   },
   [inkSepolia.id]: {
     id: inkSepolia.id,
     name: "Ink Sepolia",
     explorer: "https://explorer-sepolia.inkonchain.com/",
     tokens: {
-      WETH: "0x4200000000000000000000000000000000000006",
-      USDC: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+      WETH: "0x60C67E75292B101F9289f11f59aD7DD75194CCa6",
     },
+    counterAddress: "0xEEeBe2F778AA186e88dCf2FEb8f8231565769C27",
+  },
+  [arbitrumSepolia.id]: {
+    id: arbitrumSepolia.id,
+    name: "Arbitrum Sepolia",
+    explorer: "https://sepolia.arbiscan.io/",
+    tokens: {
+      WETH: "0x980B62Da83eFf3D4576C647993b0c1D7faf17c73",
+    },
+    counterAddress: "0xEEeBe2F778AA186e88dCf2FEb8f8231565769C27",
+  },
+  [flowTestnet.id]: {
+    id: flowTestnet.id,
+    name: "Flow Testnet",
+    explorer: "https://testnet.evm.nodes.onflow.org",
+    tokens: {},
+    counterAddress: "0xE27C1359cf02B49acC6474311Bd79d1f10b1f8De",
+  },
+  [storyAeneid.id]: {
+    id: storyAeneid.id,
+    name: "Story Aeneid",
+    explorer: "https://aeneid.storyscan.io",
+    tokens: {
+      WIP: "0x1514000000000000000000000000000000000000",
+    },
+    counterAddress: "0xa2202D3148ac0F0F44b0bED0153248a0524EdA8D",
   },
 };
 
@@ -72,8 +101,8 @@ const WalletInfoComponent = () => {
 
   const [chainId, setChainId] = useState<number>(sepolia.id);
   const [paymentType, setPaymentType] = useState<string>("sponsored");
-  const [erc20TokenAddress, setErc20TokenAddress] = useState<`0x${string}`>(
-    CHAIN_CONFIGS[sepolia.id].tokens.WETH
+  const [erc20TokenAddress, setErc20TokenAddress] = useState<`0x${string}` | undefined>(
+    CHAIN_CONFIGS[sepolia.id].tokens?.WETH
   );
 
   const [transactionHash, setTransactionHash] = useState<string | null>(null);
@@ -92,19 +121,38 @@ const WalletInfoComponent = () => {
         paymentType === "sponsored"
           ? sponsored(sponsorApiKey)
           : paymentType === "erc20"
-          ? erc20(erc20TokenAddress)
+          ? erc20(erc20TokenAddress!)
           : native();
-      // Example transaction - sending a simple call
-      const response = await client.execute({
+      // Example transaction - sending a simple increment call
+
+      const incrementAbi = [
+        {
+          name: "increment",
+          type: "function",
+          stateMutability: "nonpayable",
+          inputs: [],
+          outputs: [],
+        },
+      ] as const;
+
+      // Create the encoded function data
+      const incrementData = encodeFunctionData({
+        abi: incrementAbi,
+        functionName: "increment",
+      });
+
+      const preparedCalls = await client.prepare({
         payment,
         calls: [
           {
-            to: "0xa8851f5f279eD47a292f09CA2b6D40736a51788E",
-            data: "0xd09de08a",
+            to: CHAIN_CONFIGS[chainId].counterAddress,
+            data: incrementData,
             value: 0n,
           },
         ],
-      });
+      })
+      
+      const response = await client.send({preparedCalls});
 
       response.on("submitted", (status: GelatoTaskStatus) => {
         console.log("Transaction submitted:", status.transactionHash);
@@ -281,13 +329,20 @@ export default function Providers() {
       // Changing this to `dynamic` or `privy` is enough to change WaaS provider
       // VITE_WAAS_APP_ID also needs to be set accordingly
       settings={{
+        scw: {
+          type: "gelato",
+        },
         apiKey: sponsorApiKey,
-        // wallet: "kernel"
-        waas: dynamic(waasAppId),
+        waas: dynamic(waasAppId), // configure the networks below on your WAAS dashboard
         wagmi: wagmi({
-          chains: [inkSepolia],
+          chains: [inkSepolia, sepolia, baseSepolia, arbitrumSepolia, flowTestnet, storyAeneid],
           transports: {
             [inkSepolia.id]: http(),
+            [sepolia.id]: http(),
+            [baseSepolia.id]: http(),
+            [arbitrumSepolia.id]: http(),
+            [flowTestnet.id]: http(),
+            [storyAeneid.id]: http(),
           },
         }),
       }}
